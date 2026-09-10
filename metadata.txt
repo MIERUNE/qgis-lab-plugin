@@ -2,12 +2,15 @@
 name=QGIS LAB
 qgisMinimumVersion=3.44
 qgisMaximumVersion=4.99
+supportsQt6=True
 description=Read, search and bookmark QGIS LAB articles inside QGIS.
 about=Read QGIS LAB articles and images in a native reader, search all articles and keep bookmarks across sessions. Uses only QGIS and its bundled Qt; no extra packages or browser engine required.
 version=dev
 author=MIERUNE Inc.
 email=info@mierune.co.jp
-homepage=https://qgis.mierune.co.jp/
+homepage=https://github.com/MIERUNE/qgis-lab-plugin
+tracker=https://github.com/MIERUNE/qgis-lab-plugin/issues
+repository=https://github.com/MIERUNE/qgis-lab-plugin
 category=Web
 icon=icon.svg
 tags=qgis,learning,articles,bookmarks
