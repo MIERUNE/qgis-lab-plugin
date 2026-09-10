@@ -27,6 +27,21 @@ class PackageTests(unittest.TestCase):
                 metadata.read_string(
                     archive.read("qgislab_plugin/metadata.txt").decode()
                 )
+                for key in (
+                    "name",
+                    "qgisMinimumVersion",
+                    "description",
+                    "about",
+                    "version",
+                    "author",
+                    "email",
+                    "homepage",
+                    "tracker",
+                    "repository",
+                ):
+                    with self.subTest(metadata_key=key):
+                        self.assertTrue(metadata["general"].get(key, "").strip())
+                self.assertIn("qgislab_plugin/LICENSE", names)
                 self.assertEqual(metadata["general"]["version"], "1.2.3")
                 self.assertIn("qgislab_plugin/" + metadata["general"]["icon"], names)
 
