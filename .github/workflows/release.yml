@@ -1,0 +1,44 @@
+name: Release plugin
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.9'
+      - run: python -m unittest discover -s tests -v
+      - name: Build ZIP
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            python scripts/package.py --version "$RELEASE_TAG"
+          else
+            python scripts/package.py
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qgislab_plugin
+          path: dist/qgislab_plugin.zip
+      - name: Attach ZIP to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/qgislab_plugin.zip --clobber
+      - name: Publish to QGIS plugin repository
+        if: github.event_name == 'release' && vars.PUBLISH_TO_QGIS == 'true'
+        env:
+          QGIS_PLUGIN_TOKEN: ${{ secrets.QGIS_PLUGIN_TOKEN }}
+        run: |
+          curl --fail-with-body --request POST \
+            https://plugins.qgis.org/plugins/api/qgislab_plugin/version/add/ \
+            --header "Authorization: Bearer $QGIS_PLUGIN_TOKEN" \
+            --form package=@dist/qgislab_plugin.zip
