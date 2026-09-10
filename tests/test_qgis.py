@@ -660,8 +660,8 @@ class ReaderTests(unittest.TestCase):
         paragraph = self.reader.document().find("Full article body").blockFormat()
         self.assertEqual(paragraph.lineHeight(), 32)
         self.assertEqual(
-            paragraph.lineHeightType(),
-            QTextBlockFormat.LineHeightTypes.MinimumHeight.value,
+            QTextBlockFormat.LineHeightTypes(paragraph.lineHeightType()),
+            QTextBlockFormat.LineHeightTypes.MinimumHeight,
         )
         frame = self.reader.document().rootFrame().frameFormat()
         column = (

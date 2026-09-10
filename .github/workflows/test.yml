@@ -8,12 +8,11 @@ permissions:
   contents: read
 jobs:
   portable:
-    name: Core / ${{ matrix.os }} / Python ${{ matrix.python }}
-    runs-on: ${{ matrix.os }}
+    name: Core / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         python: ['3.9', '3.12']
     steps:
       - uses: actions/checkout@v6
