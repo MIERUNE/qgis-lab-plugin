@@ -4,11 +4,12 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from scripts.package import build
+from scripts.package import ROOT, build
 
 
 class PackageTests(unittest.TestCase):
     def test_installable_layout_and_release_version(self):
+        source_metadata = (ROOT / "metadata.txt").read_bytes()
         with tempfile.TemporaryDirectory() as directory:
             path = build(Path(directory) / "plugin.zip", "v1.2.3")
             with ZipFile(path) as archive:
@@ -28,3 +29,15 @@ class PackageTests(unittest.TestCase):
                 )
                 self.assertEqual(metadata["general"]["version"], "1.2.3")
                 self.assertIn("qgislab_plugin/" + metadata["general"]["icon"], names)
+
+        self.assertEqual((ROOT / "metadata.txt").read_bytes(), source_metadata)
+
+    def test_local_build_keeps_development_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = build(Path(directory) / "plugin.zip")
+            with ZipFile(path) as archive:
+                metadata = configparser.ConfigParser()
+                metadata.read_string(
+                    archive.read("qgislab_plugin/metadata.txt").decode()
+                )
+                self.assertEqual(metadata["general"]["version"], "dev")
