@@ -34,7 +34,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$RELEASE_TAG" dist/qgislab_plugin.zip --clobber
       - name: Publish to QGIS plugin repository
-        if: github.event_name == 'release' && vars.PUBLISH_TO_QGIS == 'true'
+        if: github.event_name == 'release'
         env:
           QGIS_PLUGIN_TOKEN: ${{ secrets.QGIS_PLUGIN_TOKEN }}
         run: |
