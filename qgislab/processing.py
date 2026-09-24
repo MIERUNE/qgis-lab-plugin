@@ -1,5 +1,7 @@
 """Article search as a Processing table, usable from the toolbox and models."""
 
+from pathlib import Path
+
 from qgis.core import (
     Qgis,
     QgsBlockingNetworkRequest,
@@ -15,6 +17,7 @@ from qgis.core import (
     QgsProcessingProvider,
 )
 from qgis.PyQt.QtCore import QMetaType, QUrl
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from .search import PAGE_SIZE, parse_results, search_url
@@ -26,6 +29,9 @@ class LabProvider(QgsProcessingProvider):
 
     def name(self):
         return "QGIS LAB"
+
+    def icon(self):
+        return QIcon(str(Path(__file__).parent.parent / "icon.svg"))
 
     def loadAlgorithms(self):
         self.addAlgorithm(SearchArticles())
