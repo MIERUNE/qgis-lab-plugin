@@ -12,6 +12,18 @@ from .network import HttpGet
 PAGE_SIZE = 12
 
 
+def search_url(freeword="", page=1):
+    query = urlencode(
+        {
+            "freeword": freeword.strip(),
+            "page": page,
+            "limit": PAGE_SIZE,
+            "order": "newest",
+        }
+    )
+    return SITE_URL + "_api/posts?" + query
+
+
 @dataclass(frozen=True)
 class SearchResult:
     articles: list
@@ -77,15 +89,7 @@ class SearchClient(QObject):
 
     def search(self, freeword="", page=1):
         self.cancel()
-        query = urlencode(
-            {
-                "freeword": freeword.strip(),
-                "page": page,
-                "limit": PAGE_SIZE,
-                "order": "newest",
-            }
-        )
-        request = HttpGet(SITE_URL + "_api/posts?" + query, 5 * 1024 * 1024, self)
+        request = HttpGet(search_url(freeword, page), 5 * 1024 * 1024, self)
         self.request = request
         request.loaded.connect(lambda data: self._loaded(request, data))
         request.failed.connect(lambda error: self._failed(request, error))
