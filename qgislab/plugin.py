@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from .dock import LabDock
+from .processing import LabProvider
 
 
 class QgisLabPlugin:
@@ -14,8 +16,15 @@ class QgisLabPlugin:
         self.iface = iface
         self.action = None
         self.dock = None
+        self.provider = None
+
+    def initProcessing(self):
+        if self.provider is None:
+            self.provider = LabProvider()
+            QgsApplication.processingRegistry().addProvider(self.provider)
 
     def initGui(self):
+        self.initProcessing()
         self.action = QAction(
             QIcon(str(Path(__file__).parent.parent / "icon.svg")),
             "QGIS LAB",
@@ -35,6 +44,9 @@ class QgisLabPlugin:
         self.dock.start()
 
     def unload(self):
+        if self.provider is not None:
+            QgsApplication.processingRegistry().removeProvider(self.provider)
+            self.provider = None
         if self.dock is not None:
             self.dock.shutdown()
             self.iface.removeDockWidget(self.dock)

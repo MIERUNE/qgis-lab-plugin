@@ -13,4 +13,4 @@ repository=https://github.com/MIERUNE/qgis-lab-plugin
 category=Web
 icon=icon.svg
 tags=qgis,learning,articles,bookmarks
-hasProcessingProvider=no
+hasProcessingProvider=yes

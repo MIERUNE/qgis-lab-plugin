@@ -239,7 +239,13 @@ class DockTests(unittest.TestCase):
 
     def test_lifecycle_uses_one_dock_and_unloads(self):
         plugin = QgisLabPlugin(self.iface)
+        plugin.initProcessing()
+        provider = plugin.provider
         plugin.initGui()
+        self.assertIs(plugin.provider, provider)
+        self.assertIsNotNone(
+            QgsApplication.processingRegistry().algorithmById("qgislab:searcharticles")
+        )
         with patch.object(LabDock, "start"):
             plugin.run()
             first = plugin.dock
@@ -248,6 +254,132 @@ class DockTests(unittest.TestCase):
         plugin.unload()
         self.assertIsNone(plugin.dock)
         self.assertEqual(self.iface.actions, [])
+        self.assertIsNone(QgsApplication.processingRegistry().providerById("qgislab"))
+
+
+class ProcessingTests(unittest.TestCase):
+    def setUp(self):
+        from qgis.core import QgsProcessingContext, QgsProcessingFeedback
+
+        from qgislab.processing import SearchArticles
+
+        self.algorithm = SearchArticles()
+        self.algorithm.initAlgorithm()
+        self.context = QgsProcessingContext()
+        self.feedback = QgsProcessingFeedback()
+        self.parameters = {
+            "QUERY": " 地図 & QGIS ",
+            "MAX_RESULTS": 13,
+            "OUTPUT": "memory:articles",
+        }
+
+    def payload(self, offset=0, total=25):
+        return json.dumps(
+            {
+                "contents": [
+                    {
+                        "id": str(i),
+                        "title": f"記事{i}",
+                        "about": "<p>概要</p>",
+                        "publishedAt": "2026-09-10T00:00:00Z",
+                        "category": {"name": "入門"},
+                    }
+                    for i in range(offset, min(offset + 12, total))
+                ],
+                "totalCount": total,
+                "offset": offset,
+                "limit": 12,
+            }
+        ).encode()
+
+    def run_search(self, pages):
+        from qgis.core import QgsBlockingNetworkRequest
+
+        with patch("qgislab.processing.QgsBlockingNetworkRequest") as factory:
+            factory.ErrorCode = QgsBlockingNetworkRequest.ErrorCode
+            network = factory.return_value
+            network.get.return_value = QgsBlockingNetworkRequest.ErrorCode.NoError
+            network.reply.return_value.content.side_effect = pages
+            result = self.algorithm.processAlgorithm(
+                self.parameters, self.context, self.feedback
+            )
+            return self.context.getMapLayer(result["OUTPUT"]), network
+
+    def test_paging_limit_encoding_and_output_metadata(self):
+        from urllib.parse import parse_qs
+
+        layer, network = self.run_search([self.payload(), self.payload(12)])
+        self.assertEqual(layer.featureCount(), 13)
+        self.assertEqual(
+            layer.fields().names(),
+            ["title", "url", "summary", "published", "categories"],
+        )
+        self.assertEqual(
+            next(layer.getFeatures()).attributes(),
+            [
+                "記事0",
+                "https://qgis.mierune.co.jp/posts/0",
+                "概要",
+                "2026-09-10",
+                "入門",
+            ],
+        )
+        self.assertFalse(layer.isSpatial())
+        self.assertEqual(network.get.call_count, 2)
+        query = parse_qs(network.get.call_args.args[0].url().query())
+        self.assertEqual(query["freeword"], ["地図 & QGIS"])
+        self.assertEqual(query["page"], ["2"])
+        self.assertIs(network.get.call_args.kwargs["feedback"], self.feedback)
+
+    def test_empty_results_and_last_page(self):
+        layer, network = self.run_search([self.payload(total=0)])
+        self.assertEqual(layer.featureCount(), 0)
+        self.assertEqual(network.get.call_count, 1)
+        layer, network = self.run_search([self.payload(total=2)])
+        self.assertEqual(layer.featureCount(), 2)
+        self.assertEqual(network.get.call_count, 1)
+
+    def test_malformed_response_and_repeated_page_fail(self):
+        from qgis.core import QgsProcessingException
+
+        for pages in ([b"invalid"], [self.payload(), self.payload()]):
+            with self.assertRaises(QgsProcessingException):
+                self.run_search(pages)
+
+    def test_cancellation_before_and_during_request(self):
+        self.feedback.cancel()
+        layer, network = self.run_search([])
+        self.assertEqual(layer.featureCount(), 0)
+        network.get.assert_not_called()
+
+        from qgis.core import QgsProcessingFeedback
+
+        self.feedback = QgsProcessingFeedback()
+        with patch("qgislab.processing.QgsBlockingNetworkRequest") as factory:
+            factory.return_value.get.side_effect = lambda *a, **kw: (
+                self.feedback.cancel()
+            )
+            result = self.algorithm.processAlgorithm(
+                self.parameters, self.context, self.feedback
+            )
+            self.assertEqual(
+                self.context.getMapLayer(result["OUTPUT"]).featureCount(), 0
+            )
+            factory.return_value.reply.assert_not_called()
+
+    def test_network_failure_is_processing_error(self):
+        from qgis.core import QgsBlockingNetworkRequest, QgsProcessingException
+
+        with patch("qgislab.processing.QgsBlockingNetworkRequest") as factory:
+            factory.ErrorCode = QgsBlockingNetworkRequest.ErrorCode
+            factory.return_value.get.return_value = (
+                QgsBlockingNetworkRequest.ErrorCode.ServerExceptionError
+            )
+            factory.return_value.errorMessage.return_value = "HTTP 503"
+            with self.assertRaisesRegex(QgsProcessingException, "HTTP 503"):
+                self.algorithm.processAlgorithm(
+                    self.parameters, self.context, self.feedback
+                )
 
 
 class Reply(QObject):
