@@ -24,6 +24,7 @@ except ImportError:
         raise
     raise unittest.SkipTest("QGIS Python environment is required") from None
 
+from qgislab import i18n  # noqa: E402
 from qgislab.articles import Article  # noqa: E402
 from qgislab.dock import LabDock  # noqa: E402
 from qgislab.network import HttpGet  # noqa: E402
@@ -63,6 +64,7 @@ class Iface:
 
 class DockTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         self.temp = tempfile.TemporaryDirectory()
         self.settings = QSettings(
             self.temp.name + "/settings.ini", QSettings.Format.IniFormat
@@ -237,6 +239,14 @@ class DockTests(unittest.TestCase):
         restored.shutdown()
         restored.deleteLater()
 
+    def test_plugin_loads_translation_for_qgis_locale(self):
+        with patch("qgislab.plugin.QgsApplication") as app:
+            app.instance.return_value.locale.return_value = "ja_JP"
+            QgisLabPlugin(self.iface)
+        self.assertEqual(i18n.tr("Home"), "ホーム")
+        i18n.load("en")
+        self.assertEqual(i18n.tr("Home"), "Home")
+
     def test_lifecycle_uses_one_dock_and_unloads(self):
         plugin = QgisLabPlugin(self.iface)
         plugin.initGui()
@@ -280,6 +290,7 @@ class Reply(QObject):
 
 class NetworkTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         self.client = HttpGet("https://example.com/articles", 5 * 1024 * 1024)
         self.reply = Reply()
         self.mock = patch("qgislab.network.QgsNetworkAccessManager")
@@ -314,7 +325,7 @@ class NetworkTests(unittest.TestCase):
     def test_timeout_and_size_limit(self):
         self.client.timer.timeout.emit()
         self.assertTrue(self.reply.aborted)
-        self.assertIn("タイムアウト", self.failed[0])
+        self.assertIn("timed out", self.failed[0])
 
     def test_size_limit(self):
         self.reply.data = b"x" * (5 * 1024 * 1024 + 1)
@@ -477,6 +488,7 @@ PAGE_WITH_IMAGE = PAGE.replace(
 
 class ReaderTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         PendingGet.calls = []
         self.mock = patch("qgislab.reader.HttpGet", PendingGet)
         self.mock.start()
@@ -531,7 +543,7 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/posts/b")
         self.reader.home()
         self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/")
-        self.assertIn("記事を選択してください", self.reader.toPlainText())
+        self.assertIn("Select an article", self.reader.toPlainText())
 
     def test_home_shows_guidance_and_installed_version_without_network(self):
         from configparser import ConfigParser
@@ -541,10 +553,10 @@ class ReaderTests(unittest.TestCase):
         metadata.read(
             Path(__file__).resolve().parents[1] / "metadata.txt", encoding="utf-8"
         )
-        self.assertIn("記事を選択してください", self.reader.toPlainText())
-        self.assertIn("このプラグインについて", self.reader.toPlainText())
+        self.assertIn("Select an article", self.reader.toPlainText())
+        self.assertIn("About this plugin", self.reader.toPlainText())
         self.assertIn(
-            "バージョン " + metadata["general"]["version"], self.reader.toPlainText()
+            "Version " + metadata["general"]["version"], self.reader.toPlainText()
         )
         self.assertFalse(self.reader._logo.isNull())
         self.assertEqual(PendingGet.calls, [])
@@ -571,10 +583,19 @@ class ReaderTests(unittest.TestCase):
         PendingGet.calls[-1].loaded.emit(PAGE)
         self.assertIn("Full article body", self.reader.toPlainText())
 
+    def test_home_is_translated_to_japanese(self):
+        i18n.load("ja")
+        self.addCleanup(i18n.load, "en")
+        self.reader.home()
+        text = self.reader.toPlainText()
+        self.assertIn("記事を選択してください", text)
+        self.assertIn("このプラグインについて", text)
+        self.assertEqual(self.reader.current_title, "ホーム")
+
     def test_malformed_page_reports_error(self):
         self.reader.open("/posts/a")
         PendingGet.calls[-1].loaded.emit(b"<html>login</html>")
-        self.assertIn("本文を見つけられません", self.reader.toPlainText())
+        self.assertIn("Could not find the article body", self.reader.toPlainText())
 
     def test_images_use_network_and_resize_without_reloading_article(self):
         from qgis.PyQt.QtCore import QBuffer, QIODevice
@@ -617,7 +638,7 @@ class ReaderTests(unittest.TestCase):
         PendingGet.calls[-1].loaded.emit(PAGE_WITH_IMAGE)
         PendingGet.calls[-1].loaded.emit(b"not an image")
         self.assertIn("Full article body", self.reader.toPlainText())
-        self.assertIn("画像 1 枚を表示できません", messages[-1])
+        self.assertIn("Images that could not be displayed: 1", messages[-1])
 
     def test_new_navigation_cancels_image_requests(self):
         self.reader.open("/posts/a")

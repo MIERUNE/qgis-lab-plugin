@@ -6,6 +6,7 @@ from urllib.parse import quote, urlencode
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
+from . import i18n
 from .articles import SITE_URL, Article, date_text, plain_text
 from .network import HttpGet
 
@@ -64,7 +65,9 @@ def parse_results(data):
             articles.append(article)
         return SearchResult(articles, total, offset, limit)
     except (ValueError, TypeError, KeyError, AttributeError) as error:
-        raise ValueError("記事検索の応答形式が正しくありません。") from error
+        raise ValueError(
+            i18n.tr("The article search response was malformed.")
+        ) from error
 
 
 class SearchClient(QObject):

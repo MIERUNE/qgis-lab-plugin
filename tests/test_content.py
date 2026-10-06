@@ -156,5 +156,5 @@ class ContentTests(unittest.TestCase):
         ).encode()
         content = extract_content(data, URL)
         self.assertIn("QGIS 3.44", content.html)
-        self.assertIn("注意：", content.html)
+        self.assertIn("Caution:", content.html)
         self.assertEqual(content.images, {})

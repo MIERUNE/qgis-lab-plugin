@@ -4,6 +4,8 @@ from qgis.core import QgsNetworkAccessManager
 from qgis.PyQt.QtCore import QObject, QTimer, QUrl, pyqtSignal
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 
+from . import i18n
+
 
 class HttpGet(QObject):
     loaded = pyqtSignal(bytes)
@@ -18,7 +20,9 @@ class HttpGet(QObject):
         self.failure = ""
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
-        self.timer.timeout.connect(lambda: self._abort("取得がタイムアウトしました。"))
+        self.timer.timeout.connect(
+            lambda: self._abort(i18n.tr("The download timed out."))
+        )
 
     def start(self):
         if self.reply is not None:
@@ -40,7 +44,7 @@ class HttpGet(QObject):
             return
         self.buffer.extend(bytes(self.reply.readAll()))
         if len(self.buffer) > self.byte_limit:
-            self._abort("取得サイズが上限を超えています。")
+            self._abort(i18n.tr("The download exceeds the size limit."))
 
     def _abort(self, message):
         if self.reply is not None:
@@ -53,13 +57,13 @@ class HttpGet(QObject):
         self.buffer.extend(bytes(reply.readAll()))
         failure = self.failure
         if len(self.buffer) > self.byte_limit:
-            failure = "取得サイズが上限を超えています。"
+            failure = i18n.tr("The download exceeds the size limit.")
         status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
         if not failure and (
             reply.error() != QNetworkReply.NetworkError.NoError or status != 200
         ):
-            failure = (
-                f"取得できませんでした（HTTP {status or '—'}）: {reply.errorString()}"
+            failure = i18n.tr("Download failed (HTTP {}): {}").format(
+                status or "—", reply.errorString()
             )
         reply.deleteLater()
         data = bytes(self.buffer)
