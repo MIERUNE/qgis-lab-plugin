@@ -5,13 +5,40 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from html import unescape
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit
 
 SITE_URL = "https://qgis.mierune.co.jp/"
+# The site publishes every article in Japanese; some also have an English version
+# under /en/. The plugin shows one language at a time, never a mix.
 
 
-def article_url(url):
-    """One bookmark per article, regardless of tracking query or section anchor."""
+def site_language(locale):
+    """Language of the articles to show for a QGIS locale such as "ja_JP" or "fr".
+
+    Japanese keeps the Japanese site; every other locale gets the English articles.
+    """
+    return "ja" if locale.replace("-", "_").split("_")[0].lower() == "ja" else "en"
+
+
+def home_url(language):
+    return SITE_URL + ("en/" if language == "en" else "")
+
+
+def post_url(identifier, language):
+    return home_url(language) + "posts/" + quote(identifier, safe="")
+
+
+def article_language(url):
+    """Language of an article URL (assumes article_url() accepted it)."""
+    return "en" if urlsplit(url).path.startswith("/en/") else "ja"
+
+
+def article_url(url, language=None):
+    """One bookmark per article, regardless of tracking query or section anchor.
+
+    With ``language`` only articles in that language are accepted, so the reader
+    never opens an article of the other language.
+    """
     try:
         parts = urlsplit(urljoin(SITE_URL, url))
         path = unquote(parts.path).rstrip("/")
@@ -21,8 +48,9 @@ def article_url(url):
             or parts.username
             or parts.password
             or parts.port not in (None, 80, 443)
-            or not re.fullmatch(r"/posts/[^/\s?#]+", path)
+            or not re.fullmatch(r"/(?:en/)?posts/[^/\s?#]+", path)
             or path.rsplit("/", 1)[-1] in (".", "..")
+            or (language is not None and article_language(path) != language)
         ):
             return ""
         return SITE_URL.rstrip("/") + parts.path.rstrip("/")

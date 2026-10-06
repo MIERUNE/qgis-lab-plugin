@@ -2,12 +2,12 @@
 
 import json
 from dataclasses import dataclass
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from qgis.PyQt.QtCore import QObject, pyqtSignal
 
 from . import i18n
-from .articles import SITE_URL, Article, date_text, plain_text
+from .articles import SITE_URL, Article, date_text, plain_text, post_url
 from .network import HttpGet
 
 PAGE_SIZE = 12
@@ -21,7 +21,7 @@ class SearchResult:
     limit: int
 
 
-def parse_results(data):
+def parse_results(data, language):
     try:
         payload = json.loads(data)
         contents = payload["contents"]
@@ -52,7 +52,7 @@ def parse_results(data):
             thumbnail = eyecatch.get("url", "") if isinstance(eyecatch, dict) else ""
             article = Article.from_dict(
                 {
-                    "url": SITE_URL + "posts/" + quote(identifier, safe=""),
+                    "url": post_url(identifier, language),
                     "title": title,
                     "thumbnail": thumbnail,
                     "summary": plain_text(item.get("about") or ""),
@@ -74,8 +74,9 @@ class SearchClient(QObject):
     loaded = pyqtSignal(object)
     failed = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, language, parent=None):
         super().__init__(parent)
+        self.language = language
         self.request = None
 
     def search(self, freeword="", page=1):
@@ -86,6 +87,8 @@ class SearchClient(QObject):
                 "page": page,
                 "limit": PAGE_SIZE,
                 "order": "newest",
+                # Untranslated articles are simply absent from the English list.
+                "locale": self.language,
             }
         )
         request = HttpGet(SITE_URL + "_api/posts?" + query, 5 * 1024 * 1024, self)
@@ -100,7 +103,7 @@ class SearchClient(QObject):
         self.request = None
         request.deleteLater()
         try:
-            result = parse_results(data)
+            result = parse_results(data, self.language)
         except ValueError as error:
             self.failed.emit(str(error))
         else:

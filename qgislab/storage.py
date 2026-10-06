@@ -2,15 +2,24 @@
 
 import json
 
-from .articles import Article
+from .articles import Article, article_language
 
 
 class Library:
-    """Accept QSettings (or an equivalent store) without leaking its keys to the UI."""
+    """Accept QSettings (or an equivalent store) without leaking its keys to the UI.
 
-    def __init__(self, settings):
+    Bookmarks of both languages are kept, so switching QGIS's language back and
+    forth loses nothing, but only those in the current language are listed.
+    """
+
+    def __init__(self, settings, language):
         self.settings = settings
-        self.bookmarks = self._read("bookmarks")
+        self.language = language
+        self._articles = self._read("bookmarks")
+
+    @property
+    def bookmarks(self):
+        return [a for a in self._articles if article_language(a.url) == self.language]
 
     def _read(self, key):
         try:
@@ -34,14 +43,14 @@ class Library:
         self.settings.sync()
 
     def is_saved(self, url):
-        return any(a.url == url for a in self.bookmarks)
+        return any(a.url == url for a in self._articles)
 
     def toggle(self, article):
         if self.is_saved(article.url):
-            self.bookmarks = [a for a in self.bookmarks if a.url != article.url]
+            self._articles = [a for a in self._articles if a.url != article.url]
         else:
-            self.bookmarks.insert(0, article)
-        self._write("bookmarks", self.bookmarks)
+            self._articles.insert(0, article)
+        self._write("bookmarks", self._articles)
 
     def find(self, url):
-        return next((a for a in self.bookmarks if a.url == url), None)
+        return next((a for a in self._articles if a.url == url), None)

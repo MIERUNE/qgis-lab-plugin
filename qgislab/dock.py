@@ -23,7 +23,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from . import i18n
-from .articles import SITE_URL, Article, article_url, clean_title
+from .articles import Article, article_url, clean_title
 from .reader import ArticleReader
 from .search import PAGE_SIZE, SearchClient, SearchResult
 from .storage import Library
@@ -106,8 +106,9 @@ class ArticleDelegate(QStyledItemDelegate):
 
 
 class LabDock(QDockWidget):
-    def __init__(self, iface, settings=None):
+    def __init__(self, iface, language, settings=None):
         super().__init__("QGIS LAB", iface.mainWindow())
+        self.language = language
         self.setObjectName("QgisLabDock")
         font = QFont(self.font())
         font.setPointSize(11)
@@ -118,7 +119,7 @@ class LabDock(QDockWidget):
             "QDockWidget#QgisLabDock QListWidget { border: 1px solid palette(mid); border-radius: 6px; }"
         )
         self.settings = settings if settings is not None else QgsSettings()
-        self.library = Library(self.settings)
+        self.library = Library(self.settings, language)
         self.started = False
         self.results = SearchResult([], 0, 0, PAGE_SIZE)
         self.search_page = 1
@@ -217,7 +218,7 @@ class LabDock(QDockWidget):
         external = self.external_button = QPushButton(i18n.tr("↗ Open in browser"))
         nav.addWidget(external)
         read.addLayout(nav)
-        self.reader = ArticleReader(reader)
+        self.reader = ArticleReader(language, reader)
         read.addWidget(self.reader, 1)
         self.splitter.addWidget(reader)
         self.splitter.setChildrenCollapsible(False)
@@ -229,7 +230,7 @@ class LabDock(QDockWidget):
             self.splitter.restoreState(saved_state)
         outer.addWidget(self.splitter, 1)
         self.setWidget(root)
-        self.search_client = SearchClient(self)
+        self.search_client = SearchClient(language, self)
         self.search_client.loaded.connect(self._search_loaded)
         self.search_client.failed.connect(self._search_failed)
         self.search_timer = QTimer(self)
@@ -246,7 +247,7 @@ class LabDock(QDockWidget):
         self.save_button.clicked.connect(self._toggle_bookmark)
         self.reader.changed.connect(self._page_changed)
         self.reload_button.clicked.connect(self.reader.reload)
-        home.clicked.connect(lambda: self.reader.open(SITE_URL))
+        home.clicked.connect(lambda: self.reader.open(self.reader.home_url))
         external.clicked.connect(self.reader.open_external)
         self.render_list()
         self._page_changed()
@@ -254,7 +255,7 @@ class LabDock(QDockWidget):
     def start(self):
         if not self.started:
             self.started = True
-            self.reader.open(SITE_URL)
+            self.reader.open(self.reader.home_url)
             self._run_search()
 
     def render_list(self, *_):

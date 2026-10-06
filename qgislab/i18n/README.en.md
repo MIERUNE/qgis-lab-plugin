@@ -57,6 +57,15 @@ python3 qgislab/i18n/extract.py --check    # exit non-zero if out of date (for C
 Then fill in the empty translations in `qgislab/i18n/ja.json` (edit directly; no binary
 compilation step).
 
+## Article language
+
+The language of the **articles** follows the same QGIS locale but is decided
+separately (`articles.site_language()`): a `ja` locale shows the Japanese site as
+before, every other locale shows the English articles only (`/en/posts/<id>`, and
+`/_api/posts?locale=en`, which lists only articles that have an English version).
+The reader never opens an article of the other language, and bookmarks of both
+languages are kept but only the current language's are listed.
+
 ## Supported languages
 
 - English (en) — default (the source)

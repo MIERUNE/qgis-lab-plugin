@@ -8,6 +8,7 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
 from . import i18n
+from .articles import site_language
 from .dock import LabDock
 
 
@@ -19,8 +20,10 @@ class QgisLabPlugin:
         self.init_translation()
 
     def init_translation(self):
-        """Load translations for the current QGIS locale."""
-        i18n.load(QgsApplication.instance().locale())
+        """Load translations and pick the article language for the QGIS locale."""
+        locale = QgsApplication.instance().locale()
+        i18n.load(locale)
+        self.language = site_language(locale)
 
     def initGui(self):
         self.action = QAction(
@@ -35,7 +38,7 @@ class QgisLabPlugin:
 
     def run(self):
         if self.dock is None:
-            self.dock = LabDock(self.iface)
+            self.dock = LabDock(self.iface, self.language)
             self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
         self.dock.show()
         self.dock.raise_()

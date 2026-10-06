@@ -29,7 +29,7 @@ from qgis.PyQt.QtGui import (
 from qgis.PyQt.QtWidgets import QTextBrowser
 
 from . import i18n
-from .articles import SITE_URL, article_url
+from .articles import article_url, home_url
 from .content import MAX_PAGE_BYTES, extract_content, web_url
 from .network import HttpGet
 
@@ -44,8 +44,10 @@ class ArticleReader(QTextBrowser):
     failed = pyqtSignal(str)
     message = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, language, parent=None):
         super().__init__(parent)
+        self.language = language
+        self.home_url = home_url(language)
         self.setOpenLinks(False)
         self.setOpenExternalLinks(False)
         self.setAccessibleName(i18n.tr("QGIS LAB article reader"))
@@ -182,21 +184,22 @@ class ArticleReader(QTextBrowser):
         return self._index + 1 < len(self._history)
 
     def home(self):
-        self.open(SITE_URL)
+        self.open(self.home_url)
 
     def _open_link(self, url):
         # The home action shows our welcome screen; a website link opens the site.
-        if url.toString() == SITE_URL:
-            self._external(SITE_URL)
+        if url.toString() == self.home_url:
+            self._external(self.home_url)
         else:
             self.open(url.toString())
 
     def open(self, url):
-        target = web_url(url, self.current_url or SITE_URL)
+        target = web_url(url, self.current_url or self.home_url)
         if not target:
             return
-        canonical = article_url(target)
-        if not canonical and target != SITE_URL:
+        # Articles of the other language are not shown here: open them in the browser.
+        canonical = article_url(target, self.language)
+        if not canonical and target != self.home_url:
             self._external(target)
             return
         if canonical:
@@ -250,7 +253,7 @@ class ArticleReader(QTextBrowser):
         self._decoded_bytes = 0
         self._image_errors = 0
         self._restore_position = self._history[self._index][1]
-        if url == SITE_URL:
+        if url == self.home_url:
             self.current_title = i18n.tr("Home")
             self._render_home()
             self.loading.emit(False)
@@ -278,7 +281,7 @@ class ArticleReader(QTextBrowser):
         version = metadata.get("general", "version", fallback=i18n.tr("unknown"))
         self.setHtml(
             '<table cellspacing="0" cellpadding="12" bgcolor="#ffffff"><tr><td>'
-            f'<a href="{SITE_URL}"><img src="qgislab-logo:/" width="186" height="54" alt="QGIS LAB by MIERUNE"></a>'
+            f'<a href="{self.home_url}"><img src="qgislab-logo:/" width="186" height="54" alt="QGIS LAB by MIERUNE"></a>'
             "</td></tr></table>"
             '<table class="home-welcome" width="100%" cellspacing="0" cellpadding="22"><tr><td>'
             f"<h2>{i18n.tr('Select an article')}</h2>"
@@ -295,7 +298,7 @@ class ArticleReader(QTextBrowser):
             f'<h3 class="home-about-title">{i18n.tr("About this plugin")}</h3>'
             f'<p class="home-about">{i18n.tr("Read, search and save QGIS LAB articles without leaving QGIS.")}</p>'
             '<table class="home-link" cellspacing="0" cellpadding="12"><tr><td>'
-            f'<a href="{SITE_URL}"><b>{i18n.tr("Visit the QGIS LAB website ↗")}</b></a>'
+            f'<a href="{self.home_url}"><b>{i18n.tr("Visit the QGIS LAB website ↗")}</b></a>'
             "</td></tr></table>"
             f'<p class="dates home-version">{i18n.tr("QGIS LAB plugin · Version {}").format(escape(version))}</p>'
         )
