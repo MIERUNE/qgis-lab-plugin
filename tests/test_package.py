@@ -20,6 +20,9 @@ class PackageTests(unittest.TestCase):
                 self.assertIn("qgislab_plugin/qgislab/reader.py", names)
                 self.assertIn("qgislab_plugin/qgislab/content.py", names)
                 self.assertNotIn("qgislab_plugin/qgislab/browser.py", names)
+                self.assertIn("qgislab_plugin/qgislab/i18n/__init__.py", names)
+                self.assertIn("qgislab_plugin/qgislab/i18n/ja.json", names)
+                self.assertNotIn("qgislab_plugin/qgislab/i18n/extract.py", names)
                 self.assertFalse(
                     any("tests/" in name or "__pycache__" in name for name in names)
                 )

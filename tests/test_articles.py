@@ -1,6 +1,13 @@
 import unittest
 
-from qgislab.articles import Article, article_url
+from qgislab.articles import (
+    Article,
+    article_language,
+    article_url,
+    home_url,
+    post_url,
+    site_language,
+)
 
 
 class ArticleTests(unittest.TestCase):
@@ -43,6 +50,42 @@ class ArticleTests(unittest.TestCase):
         ):
             with self.subTest(url=url):
                 self.assertEqual(article_url(url), "")
+
+    def test_english_articles_live_under_en(self):
+        english = "https://qgis.mierune.co.jp/en/posts/example"
+        self.assertEqual(article_url("/en/posts/example/?utm=a#s"), english)
+        self.assertEqual(article_url(english, "en"), english)
+        self.assertEqual(article_language(english), "en")
+        self.assertEqual(article_language("https://qgis.mierune.co.jp/posts/a"), "ja")
+        for url in ("/en/posts", "/en/posts/a/b", "/en/en/posts/a", "/fr/posts/a"):
+            with self.subTest(url=url):
+                self.assertEqual(article_url(url), "")
+
+    def test_a_language_never_accepts_the_other_languages_articles(self):
+        japanese = "https://qgis.mierune.co.jp/posts/example"
+        english = "https://qgis.mierune.co.jp/en/posts/example"
+        self.assertEqual(article_url(japanese, "ja"), japanese)
+        self.assertEqual(article_url(english, "ja"), "")
+        self.assertEqual(article_url(japanese, "en"), "")
+        self.assertEqual(article_url(english, "en"), english)
+
+    def test_site_language_follows_the_qgis_locale(self):
+        for locale in ("ja", "ja_JP", "ja-JP", "JA"):
+            with self.subTest(locale=locale):
+                self.assertEqual(site_language(locale), "ja")
+        for locale in ("en", "en_US", "fr", "fr_FR", "zh_CN", "jam", ""):
+            with self.subTest(locale=locale):
+                self.assertEqual(site_language(locale), "en")
+
+    def test_home_and_post_urls_per_language(self):
+        self.assertEqual(home_url("ja"), "https://qgis.mierune.co.jp/")
+        self.assertEqual(home_url("en"), "https://qgis.mierune.co.jp/en/")
+        self.assertEqual(
+            post_url("a b", "ja"), "https://qgis.mierune.co.jp/posts/a%20b"
+        )
+        self.assertEqual(
+            post_url("a/b", "en"), "https://qgis.mierune.co.jp/en/posts/a%2Fb"
+        )
 
     def test_article_roundtrip_and_japanese_search(self):
         article = Article(

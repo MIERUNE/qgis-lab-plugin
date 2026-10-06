@@ -148,6 +148,21 @@ class ContentTests(unittest.TestCase):
             ],
         )
 
+    def test_source_credit_links_to_the_site_home_of_the_articles_language(self):
+        for url, home in (
+            (URL, "https://qgis.mierune.co.jp/"),
+            (
+                "https://qgis.mierune.co.jp/en/posts/example",
+                "https://qgis.mierune.co.jp/en/",
+            ),
+        ):
+            with self.subTest(url=url):
+                html = extract_content(page("<p>Body</p>"), url).html
+                self.assertTrue(
+                    html.endswith(f'<a href="{home}">QGIS LAB by MIERUNE</a></p>'), html
+                )
+                self.assertNotIn(f'href="{url}"', html)
+
     def test_keeps_article_header_guidance_and_converts_callout_icons(self):
         data = (
             "<article><header><h1>Title</h1><p>この記事はQGIS 3.44を使用しています。</p></header>"
@@ -156,5 +171,5 @@ class ContentTests(unittest.TestCase):
         ).encode()
         content = extract_content(data, URL)
         self.assertIn("QGIS 3.44", content.html)
-        self.assertIn("注意：", content.html)
+        self.assertIn("Caution:", content.html)
         self.assertEqual(content.images, {})

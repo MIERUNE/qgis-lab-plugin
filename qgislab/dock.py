@@ -22,7 +22,8 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
-from .articles import SITE_URL, Article, article_url, clean_title
+from . import i18n
+from .articles import Article, article_url, clean_title
 from .reader import ArticleReader
 from .search import PAGE_SIZE, SearchClient, SearchResult
 from .storage import Library
@@ -105,8 +106,9 @@ class ArticleDelegate(QStyledItemDelegate):
 
 
 class LabDock(QDockWidget):
-    def __init__(self, iface, settings=None):
+    def __init__(self, iface, language, settings=None):
         super().__init__("QGIS LAB", iface.mainWindow())
+        self.language = language
         self.setObjectName("QgisLabDock")
         font = QFont(self.font())
         font.setPointSize(11)
@@ -117,7 +119,7 @@ class LabDock(QDockWidget):
             "QDockWidget#QgisLabDock QListWidget { border: 1px solid palette(mid); border-radius: 6px; }"
         )
         self.settings = settings if settings is not None else QgsSettings()
-        self.library = Library(self.settings)
+        self.library = Library(self.settings, language)
         self.started = False
         self.results = SearchResult([], 0, 0, PAGE_SIZE)
         self.search_page = 1
@@ -132,16 +134,17 @@ class LabDock(QDockWidget):
         side = QVBoxLayout(sidebar)
         side.setContentsMargins(0, 8, 8, 0)
         self.tabs = QTabBar()
-        self.tabs.addTab("記事一覧")
+        self.tabs.addTab(i18n.tr("Articles"))
         self.tabs.addTab(
-            QIcon(str(Path(__file__).parent / "icons" / "star-filled.svg")), "保存済み"
+            QIcon(str(Path(__file__).parent / "icons" / "star-filled.svg")),
+            i18n.tr("Saved ({})").format(len(self.library.bookmarks)),
         )
         self.tabs.setExpanding(True)
         side.addWidget(self.tabs)
         self.search = QLineEdit()
-        self.search.setPlaceholderText("サイト全体の記事を検索…")
+        self.search.setPlaceholderText(i18n.tr("Search all articles…"))
         self.search.setClearButtonEnabled(True)
-        self.search.setAccessibleName("サイト全体の記事を検索")
+        self.search.setAccessibleName(i18n.tr("Search all articles"))
         self.search_controls = QWidget()
         search_row = QHBoxLayout(self.search_controls)
         search_row.setContentsMargins(0, 0, 0, 0)
@@ -149,8 +152,8 @@ class LabDock(QDockWidget):
         self.search_retry.setIcon(
             QIcon(str(Path(__file__).parent / "icons" / "refresh.svg"))
         )
-        self.search_retry.setToolTip("再検索")
-        self.search_retry.setAccessibleName("再検索")
+        self.search_retry.setToolTip(i18n.tr("Search again"))
+        self.search_retry.setAccessibleName(i18n.tr("Search again"))
         search_row.addWidget(self.search_retry)
         search_row.addWidget(self.search, 1)
         side.addWidget(self.search_controls)
@@ -163,14 +166,14 @@ class LabDock(QDockWidget):
         self.list.setItemDelegate(ArticleDelegate(self.list))
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.list.setAccessibleName("QGIS LAB 記事一覧")
+        self.list.setAccessibleName(i18n.tr("QGIS LAB article list"))
         self.list.setSpacing(3)
         side.addWidget(self.list, 1)
         self.pagination = QWidget()
         pages = QHBoxLayout(self.pagination)
         pages.setContentsMargins(0, 0, 0, 0)
-        self.previous_page = QPushButton("前のページ")
-        self.next_page = QPushButton("次のページ")
+        self.previous_page = QPushButton(i18n.tr("Previous page"))
+        self.next_page = QPushButton(i18n.tr("Next page"))
         pages.addWidget(self.previous_page)
         pages.addWidget(self.next_page)
         side.addWidget(self.pagination)
@@ -190,12 +193,12 @@ class LabDock(QDockWidget):
         self.reload_button.setIcon(
             QIcon(str(Path(__file__).parent / "icons" / "refresh.svg"))
         )
-        self.reload_button.setToolTip("再読込")
-        self.reload_button.setAccessibleName("再読込")
+        self.reload_button.setToolTip(i18n.tr("Reload"))
+        self.reload_button.setAccessibleName(i18n.tr("Reload"))
         home = QPushButton()
         home.setIcon(QIcon(str(Path(__file__).parent / "icons" / "home.svg")))
-        home.setToolTip("ホーム")
-        home.setAccessibleName("ホーム")
+        home.setToolTip(i18n.tr("Home"))
+        home.setAccessibleName(i18n.tr("Home"))
         for button in (self.reload_button, home):
             nav.addWidget(button)
         nav.addStretch()
@@ -212,10 +215,10 @@ class LabDock(QDockWidget):
         self.save_button.setObjectName("bookmark")
         self.save_button.setCheckable(True)
         nav.addWidget(self.save_button)
-        external = self.external_button = QPushButton("↗ ブラウザで開く")
+        external = self.external_button = QPushButton(i18n.tr("↗ Open in browser"))
         nav.addWidget(external)
         read.addLayout(nav)
-        self.reader = ArticleReader(reader)
+        self.reader = ArticleReader(language, reader)
         read.addWidget(self.reader, 1)
         self.splitter.addWidget(reader)
         self.splitter.setChildrenCollapsible(False)
@@ -227,7 +230,7 @@ class LabDock(QDockWidget):
             self.splitter.restoreState(saved_state)
         outer.addWidget(self.splitter, 1)
         self.setWidget(root)
-        self.search_client = SearchClient(self)
+        self.search_client = SearchClient(language, self)
         self.search_client.loaded.connect(self._search_loaded)
         self.search_client.failed.connect(self._search_failed)
         self.search_timer = QTimer(self)
@@ -244,7 +247,7 @@ class LabDock(QDockWidget):
         self.save_button.clicked.connect(self._toggle_bookmark)
         self.reader.changed.connect(self._page_changed)
         self.reload_button.clicked.connect(self.reader.reload)
-        home.clicked.connect(lambda: self.reader.open(SITE_URL))
+        home.clicked.connect(lambda: self.reader.open(self.reader.home_url))
         external.clicked.connect(self.reader.open_external)
         self.render_list()
         self._page_changed()
@@ -252,7 +255,7 @@ class LabDock(QDockWidget):
     def start(self):
         if not self.started:
             self.started = True
-            self.reader.open(SITE_URL)
+            self.reader.open(self.reader.home_url)
             self._run_search()
 
     def render_list(self, *_):
@@ -283,11 +286,15 @@ class LabDock(QDockWidget):
         self.count.setText(
             ""
             if saved_tab
-            else "検索中…"
+            else i18n.tr("Searching…")
             if self.search_pending
-            else f"{self.results.offset + 1}–{self.results.offset + len(articles)} / {self.results.total} 件"
+            else i18n.tr("Showing {}–{} of {}").format(
+                self.results.offset + 1,
+                self.results.offset + len(articles),
+                self.results.total,
+            )
             if articles
-            else f"0 / {self.results.total} 件"
+            else i18n.tr("Showing 0 of {}").format(self.results.total)
         )
         self.pagination.setVisible(not saved_tab)
         self.search_status.setVisible(not saved_tab)
@@ -298,14 +305,20 @@ class LabDock(QDockWidget):
         )
         self.search_controls.setVisible(not saved_tab)
         self.search_retry.setEnabled(not self.search_pending)
-        self.tabs.setTabText(1, f"保存済み ({len(self.library.bookmarks)})")
+        self.tabs.setTabText(
+            1, i18n.tr("Saved ({})").format(len(self.library.bookmarks))
+        )
         self.empty.setVisible(not articles and (saved_tab or not self.search_pending))
         self.empty.setText(
-            "検索に一致する記事がありません。"
+            i18n.tr("No articles match your search.")
             if not saved_tab and self.search.text().strip()
-            else "まだ保存した記事はありません。記事を開いて星ボタンを押すと保存できます。"
+            else i18n.tr(
+                "No saved articles yet. Open an article and click the star button to save it."
+            )
             if self.tabs.currentIndex() == 1
-            else "記事がありません。検索欄の左の更新ボタンで再試行できます。"
+            else i18n.tr(
+                "No articles found. Use the refresh button next to the search box to try again."
+            )
         )
 
     def _search_changed(self, *_):
@@ -321,7 +334,7 @@ class LabDock(QDockWidget):
     def _run_search(self):
         self.search_timer.stop()
         self.search_pending = True
-        self.search_status.setText("記事を検索中…")
+        self.search_status.setText(i18n.tr("Searching articles…"))
         self.render_list()
         self.search_client.search(self.search.text(), self.search_page)
 
@@ -340,7 +353,9 @@ class LabDock(QDockWidget):
         self.search_pending = False
         self.search_page = self.results.offset // self.results.limit + 1
         self.search_status.setText(
-            message + "\n検索欄の左の更新ボタンで再試行できます。"
+            message
+            + "\n"
+            + i18n.tr("Use the refresh button next to the search box to try again.")
         )
         self.render_list()
 
@@ -372,7 +387,9 @@ class LabDock(QDockWidget):
         self.save_button.setEnabled(article is not None)
         saved = bool(article and self.library.is_saved(article.url))
         self.save_button.setChecked(saved)
-        label = "ブックマークを解除" if saved else "ブックマークに保存"
+        label = (
+            i18n.tr("Remove bookmark") if saved else i18n.tr("Bookmark this article")
+        )
         self.save_button.setToolTip(label)
         self.save_button.setAccessibleName(label)
         button_height = max(

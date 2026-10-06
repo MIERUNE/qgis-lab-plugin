@@ -28,7 +28,8 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtWidgets import QTextBrowser
 
-from .articles import SITE_URL, article_url
+from . import i18n
+from .articles import article_url, home_url
 from .content import MAX_PAGE_BYTES, extract_content, web_url
 from .network import HttpGet
 
@@ -43,11 +44,13 @@ class ArticleReader(QTextBrowser):
     failed = pyqtSignal(str)
     message = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, language, parent=None):
         super().__init__(parent)
+        self.language = language
+        self.home_url = home_url(language)
         self.setOpenLinks(False)
         self.setOpenExternalLinks(False)
-        self.setAccessibleName("QGIS LAB 記事リーダー")
+        self.setAccessibleName(i18n.tr("QGIS LAB article reader"))
         self.anchorClicked.connect(self._open_link)
         font = QFont(self.font())
         font.setFamilies(["Noto Sans JP", "Hiragino Sans", "Yu Gothic", "sans-serif"])
@@ -181,21 +184,22 @@ class ArticleReader(QTextBrowser):
         return self._index + 1 < len(self._history)
 
     def home(self):
-        self.open(SITE_URL)
+        self.open(self.home_url)
 
     def _open_link(self, url):
         # The home action shows our welcome screen; a website link opens the site.
-        if url.toString() == SITE_URL:
-            self._external(SITE_URL)
+        if url.toString() == self.home_url:
+            self._external(self.home_url)
         else:
             self.open(url.toString())
 
     def open(self, url):
-        target = web_url(url, self.current_url or SITE_URL)
+        target = web_url(url, self.current_url or self.home_url)
         if not target:
             return
-        canonical = article_url(target)
-        if not canonical and target != SITE_URL:
+        # Articles of the other language are not shown here: open them in the browser.
+        canonical = article_url(target, self.language)
+        if not canonical and target != self.home_url:
             self._external(target)
             return
         if canonical:
@@ -249,12 +253,15 @@ class ArticleReader(QTextBrowser):
         self._decoded_bytes = 0
         self._image_errors = 0
         self._restore_position = self._history[self._index][1]
-        if url == SITE_URL:
-            self.current_title = "ホーム"
+        if url == self.home_url:
+            self.current_title = i18n.tr("Home")
             self._render_home()
             self.loading.emit(False)
         else:
-            self.setHtml("<h2>記事を読み込み中…</h2><p>本文を取得しています。</p>")
+            self.setHtml(
+                f"<h2>{i18n.tr('Loading article…')}</h2>"
+                f"<p>{i18n.tr('Fetching the article content…')}</p>"
+            )
             self.loading.emit(True)
             self._request = HttpGet(article_url(url), MAX_PAGE_BYTES, self)
             generation = self._generation
@@ -271,29 +278,29 @@ class ArticleReader(QTextBrowser):
         metadata.read(
             Path(__file__).resolve().parents[1] / "metadata.txt", encoding="utf-8"
         )
-        version = metadata.get("general", "version", fallback="不明")
+        version = metadata.get("general", "version", fallback=i18n.tr("unknown"))
         self.setHtml(
             '<table cellspacing="0" cellpadding="12" bgcolor="#ffffff"><tr><td>'
-            f'<a href="{SITE_URL}"><img src="qgislab-logo:/" width="186" height="54" alt="QGIS LAB by MIERUNE"></a>'
+            f'<a href="{self.home_url}"><img src="qgislab-logo:/" width="186" height="54" alt="QGIS LAB by MIERUNE"></a>'
             "</td></tr></table>"
             '<table class="home-welcome" width="100%" cellspacing="0" cellpadding="22"><tr><td>'
-            "<h2>記事を選択してください</h2>"
-            "<p>左側の「記事一覧」から、読みたい記事を選んでください。</p>"
+            f"<h2>{i18n.tr('Select an article')}</h2>"
+            f"<p>{i18n.tr('Pick an article from the “Articles” tab on the left to start reading.')}</p>"
             "</td></tr></table>"
             '<table class="home-steps" width="100%" cellspacing="0" cellpadding="8">'
             '<tr><td class="home-step" width="56" valign="top">01</td>'
-            "<td><p><b>探す</b>　キーワードで記事を検索</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Search</b> for articles by keyword')}</p></td></tr>"
             '<tr><td class="home-step" width="56" valign="top">02</td>'
-            "<td><p><b>読む</b>　記事を選ぶと、この画面に本文を表示</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Read</b> any article right in this panel')}</p></td></tr>"
             '<tr><td class="home-step" width="56" valign="top">03</td>'
-            "<td><p><b>保存する</b>　気になる記事をブックマークして、すぐに読む</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Save</b> your favorites to come back to them later')}</p></td></tr>"
             "</table>"
-            '<h3 class="home-about-title">このプラグインについて</h3>'
-            '<p class="home-about">QGIS LABの記事を、QGISで作業しながら読む・探す・保存するためのプラグインです。</p>'
+            f'<h3 class="home-about-title">{i18n.tr("About this plugin")}</h3>'
+            f'<p class="home-about">{i18n.tr("Read, search and save QGIS LAB articles without leaving QGIS.")}</p>'
             '<table class="home-link" cellspacing="0" cellpadding="12"><tr><td>'
-            f'<a href="{SITE_URL}"><b>QGIS LAB 公式サイトを開く ↗</b></a>'
+            f'<a href="{self.home_url}"><b>{i18n.tr("Visit the QGIS LAB website ↗")}</b></a>'
             "</td></tr></table>"
-            f'<p class="dates home-version">QGIS LAB プラグイン · バージョン {escape(version)}</p>'
+            f'<p class="dates home-version">{i18n.tr("QGIS LAB plugin · Version {}").format(escape(version))}</p>'
         )
 
     def _loaded(self, data, generation):
@@ -310,7 +317,7 @@ class ArticleReader(QTextBrowser):
         # QTextDocument may retain resource keys across setHtml calls.
         for key in self._content.images:
             self.document().addResource(
-                IMAGE_TYPE, QUrl(key), self._placeholder("画像を読み込み中…")
+                IMAGE_TYPE, QUrl(key), self._placeholder(i18n.tr("Loading image…"))
             )
         self.setHtml(self._content.html)
         self.loading.emit(False)
@@ -325,10 +332,12 @@ class ArticleReader(QTextBrowser):
         if self._request is not None:
             self._request.deleteLater()
             self._request = None
+        hint = i18n.tr(
+            "Click “Reload” to try again, or use “Open in browser” to view the original article."
+        )
         self.setHtml(
-            "<h2>記事を読み込めませんでした</h2>"
-            f"<p>{escape(error)}</p><p>「再読込」で再試行するか、"
-            "「ブラウザで開く」から元の記事をご覧ください。</p>"
+            f"<h2>{i18n.tr('Could not load the article')}</h2>"
+            f"<p>{escape(error)}</p><p>{hint}</p>"
         )
         self.loading.emit(False)
         self.failed.emit(error)
@@ -354,13 +363,18 @@ class ArticleReader(QTextBrowser):
         pending = len(self._queue) + len(self._image_requests)
         if pending:
             self.message.emit(
-                f"本文を表示しました · 画像を読み込み中（残り {pending} 枚）"
+                i18n.tr("Article loaded · Loading images ({} remaining)").format(
+                    pending
+                )
             )
         else:
             self.message.emit(
                 ""
                 if not self._image_errors
-                else f"画像 {self._image_errors} 枚を表示できませんでした。元の記事は「ブラウザで開く」から確認できます。"
+                else i18n.tr(
+                    "Some images could not be displayed ({} failed). "
+                    "Use “Open in browser” to see the original article."
+                ).format(self._image_errors)
             )
             self._restore_scroll()
 
@@ -416,7 +430,9 @@ class ArticleReader(QTextBrowser):
         if error:
             self._image_errors += 1
             self.document().addResource(
-                IMAGE_TYPE, QUrl(key), self._placeholder("画像を表示できませんでした")
+                IMAGE_TYPE,
+                QUrl(key),
+                self._placeholder(i18n.tr("Image could not be displayed")),
             )
             self.document().markContentsDirty(0, self.document().characterCount())
         self._start_images()
@@ -453,7 +469,7 @@ class ArticleReader(QTextBrowser):
             return (
                 self._scaled_image(image)
                 if image is not None
-                else self._placeholder("画像を読み込み中…")
+                else self._placeholder(i18n.tr("Loading image…"))
             )
         return None
 

@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 try:
     from qgis.core import QgsApplication
@@ -24,6 +25,7 @@ except ImportError:
         raise
     raise unittest.SkipTest("QGIS Python environment is required") from None
 
+from qgislab import i18n  # noqa: E402
 from qgislab.articles import Article  # noqa: E402
 from qgislab.dock import LabDock  # noqa: E402
 from qgislab.network import HttpGet  # noqa: E402
@@ -63,6 +65,7 @@ class Iface:
 
 class DockTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         self.temp = tempfile.TemporaryDirectory()
         self.settings = QSettings(
             self.temp.name + "/settings.ini", QSettings.Format.IniFormat
@@ -70,7 +73,7 @@ class DockTests(unittest.TestCase):
         self.iface = Iface()
         self.search_mock = patch("qgislab.search.HttpGet", PendingGet)
         self.search_mock.start()
-        self.dock = LabDock(self.iface, self.settings)
+        self.dock = LabDock(self.iface, "ja", self.settings)
         self.articles = [
             Article(
                 "https://qgis.mierune.co.jp/posts/one",
@@ -112,7 +115,8 @@ class DockTests(unittest.TestCase):
 
             self.assertEqual(
                 Library(
-                    QSettings(self.settings.fileName(), QSettings.Format.IniFormat)
+                    QSettings(self.settings.fileName(), QSettings.Format.IniFormat),
+                    "ja",
                 ).bookmarks,
                 [self.articles[0]],
             )
@@ -232,10 +236,33 @@ class DockTests(unittest.TestCase):
 
     def test_sidebar_is_visible_despite_legacy_preference(self):
         self.settings.setValue("qgislab/sidebar_visible", False)
-        restored = LabDock(self.iface, self.settings)
+        restored = LabDock(self.iface, "ja", self.settings)
         self.assertFalse(restored.sidebar.isHidden())
         restored.shutdown()
         restored.deleteLater()
+
+    def test_plugin_loads_translation_for_qgis_locale(self):
+        with patch("qgislab.plugin.QgsApplication") as app:
+            app.instance.return_value.locale.return_value = "ja_JP"
+            QgisLabPlugin(self.iface)
+        self.assertEqual(i18n.tr("Home"), "ホーム")
+        i18n.load("en")
+        self.assertEqual(i18n.tr("Home"), "Home")
+
+    def test_plugin_shows_japanese_articles_only_for_a_japanese_locale(self):
+        for locale, language in (("ja_JP", "ja"), ("en_US", "en"), ("fr", "en")):
+            with self.subTest(locale=locale):
+                with patch("qgislab.plugin.QgsApplication") as app:
+                    app.instance.return_value.locale.return_value = locale
+                    plugin = QgisLabPlugin(self.iface)
+                self.assertEqual(plugin.language, language)
+                with patch.object(LabDock, "start"):
+                    plugin.run()
+                self.assertEqual(plugin.dock.language, language)
+                self.assertEqual(plugin.dock.reader.language, language)
+                self.assertEqual(plugin.dock.search_client.language, language)
+                plugin.unload()
+        i18n.load("en")
 
     def test_lifecycle_uses_one_dock_and_unloads(self):
         plugin = QgisLabPlugin(self.iface)
@@ -280,6 +307,7 @@ class Reply(QObject):
 
 class NetworkTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         self.client = HttpGet("https://example.com/articles", 5 * 1024 * 1024)
         self.reply = Reply()
         self.mock = patch("qgislab.network.QgsNetworkAccessManager")
@@ -314,7 +342,7 @@ class NetworkTests(unittest.TestCase):
     def test_timeout_and_size_limit(self):
         self.client.timer.timeout.emit()
         self.assertTrue(self.reply.aborted)
-        self.assertIn("タイムアウト", self.failed[0])
+        self.assertIn("timed out", self.failed[0])
 
     def test_size_limit(self):
         self.reply.data = b"x" * (5 * 1024 * 1024 + 1)
@@ -424,7 +452,7 @@ class SearchTests(unittest.TestCase):
             "offset": 12,
             "limit": 12,
         }
-        result = parse_results(json.dumps(payload).encode())
+        result = parse_results(json.dumps(payload).encode(), "ja")
         self.assertEqual(
             result.articles[0],
             Article(
@@ -442,11 +470,42 @@ class SearchTests(unittest.TestCase):
             b'{"contents": [], "totalCount": 1, "offset": 0, "limit": 0}',
         ):
             with self.assertRaises(ValueError):
-                parse_results(data)
+                parse_results(data, "ja")
+
+    def test_search_asks_the_site_for_its_own_language(self):
+        for language in ("ja", "en"):
+            with self.subTest(language=language):
+                PendingGet.calls = []
+                with patch("qgislab.search.HttpGet", PendingGet):
+                    client = SearchClient(language)
+                    client.search("map & 地図", 2)
+                    request = PendingGet.calls[-1]
+                    client.cancel()
+                    client.deleteLater()
+                parts = urlsplit(request.url)
+                self.assertEqual(
+                    (parts.netloc, parts.path), ("qgis.mierune.co.jp", "/_api/posts")
+                )
+                query = parse_qs(parts.query)
+                self.assertEqual(query["locale"], [language])
+                self.assertEqual(query["freeword"], ["map & 地図"])
+                self.assertEqual(query["page"], ["2"])
+
+    def test_english_results_link_to_english_articles(self):
+        payload = {
+            "contents": [{"id": "über", "title": "English title"}],
+            "totalCount": 1,
+            "offset": 0,
+            "limit": 12,
+        }
+        result = parse_results(json.dumps(payload).encode(), "en")
+        self.assertEqual(
+            result.articles[0].url, "https://qgis.mierune.co.jp/en/posts/%C3%BCber"
+        )
 
     def test_replaced_search_ignores_late_success_and_failure(self):
         with patch("qgislab.search.HttpGet", PendingGet):
-            client = SearchClient()
+            client = SearchClient("ja")
             results, errors = [], []
             client.loaded.connect(results.append)
             client.failed.connect(errors.append)
@@ -477,10 +536,11 @@ PAGE_WITH_IMAGE = PAGE.replace(
 
 class ReaderTests(unittest.TestCase):
     def setUp(self):
+        i18n.load("en")
         PendingGet.calls = []
         self.mock = patch("qgislab.reader.HttpGet", PendingGet)
         self.mock.start()
-        self.reader = ArticleReader()
+        self.reader = ArticleReader("ja")
         self.reader.resize(720, 600)
         self.reader.show()
         APP.processEvents()
@@ -531,7 +591,7 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/posts/b")
         self.reader.home()
         self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/")
-        self.assertIn("記事を選択してください", self.reader.toPlainText())
+        self.assertIn("Select an article", self.reader.toPlainText())
 
     def test_home_shows_guidance_and_installed_version_without_network(self):
         from configparser import ConfigParser
@@ -541,10 +601,10 @@ class ReaderTests(unittest.TestCase):
         metadata.read(
             Path(__file__).resolve().parents[1] / "metadata.txt", encoding="utf-8"
         )
-        self.assertIn("記事を選択してください", self.reader.toPlainText())
-        self.assertIn("このプラグインについて", self.reader.toPlainText())
+        self.assertIn("Select an article", self.reader.toPlainText())
+        self.assertIn("About this plugin", self.reader.toPlainText())
         self.assertIn(
-            "バージョン " + metadata["general"]["version"], self.reader.toPlainText()
+            "Version " + metadata["general"]["version"], self.reader.toPlainText()
         )
         self.assertFalse(self.reader._logo.isNull())
         self.assertEqual(PendingGet.calls, [])
@@ -571,10 +631,31 @@ class ReaderTests(unittest.TestCase):
         PendingGet.calls[-1].loaded.emit(PAGE)
         self.assertIn("Full article body", self.reader.toPlainText())
 
+    def test_home_is_translated_to_japanese(self):
+        i18n.load("ja")
+        self.addCleanup(i18n.load, "en")
+        self.reader.home()
+        text = self.reader.toPlainText()
+        self.assertIn("記事を選択してください", text)
+        self.assertIn("このプラグインについて", text)
+        self.assertEqual(self.reader.current_title, "ホーム")
+
+    def test_source_credit_opens_the_site_instead_of_scrolling_to_the_top(self):
+        self.reader.open("/posts/a")
+        PendingGet.calls[-1].loaded.emit(PAGE)
+        self.reader.verticalScrollBar().setValue(50)
+        requests = len(PendingGet.calls)
+        with patch.object(self.reader, "_external") as external:
+            self.reader.anchorClicked.emit(QUrl("https://qgis.mierune.co.jp/"))
+            external.assert_called_once_with("https://qgis.mierune.co.jp/")
+        self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/posts/a")
+        self.assertEqual(len(PendingGet.calls), requests)
+        self.assertIn('href="https://qgis.mierune.co.jp/"', self.reader.toHtml())
+
     def test_malformed_page_reports_error(self):
         self.reader.open("/posts/a")
         PendingGet.calls[-1].loaded.emit(b"<html>login</html>")
-        self.assertIn("本文を見つけられません", self.reader.toPlainText())
+        self.assertIn("Could not find the article content", self.reader.toPlainText())
 
     def test_images_use_network_and_resize_without_reloading_article(self):
         from qgis.PyQt.QtCore import QBuffer, QIODevice
@@ -617,7 +698,7 @@ class ReaderTests(unittest.TestCase):
         PendingGet.calls[-1].loaded.emit(PAGE_WITH_IMAGE)
         PendingGet.calls[-1].loaded.emit(b"not an image")
         self.assertIn("Full article body", self.reader.toPlainText())
-        self.assertIn("画像 1 枚を表示できません", messages[-1])
+        self.assertIn("Some images could not be displayed (1 failed)", messages[-1])
 
     def test_new_navigation_cancels_image_requests(self):
         self.reader.open("/posts/a")
@@ -716,3 +797,108 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(
                 self.reader.current_url, "https://qgis.mierune.co.jp/posts/a"
             )
+
+
+class EnglishReaderTests(unittest.TestCase):
+    def setUp(self):
+        i18n.load("en")
+        PendingGet.calls = []
+        self.mock = patch("qgislab.reader.HttpGet", PendingGet)
+        self.mock.start()
+        self.reader = ArticleReader("en")
+        self.reader.resize(720, 600)
+        self.reader.show()
+        APP.processEvents()
+
+    def tearDown(self):
+        self.reader.shutdown()
+        self.reader.close()
+        self.reader.deleteLater()
+        APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.mock.stop()
+
+    def test_home_is_the_english_site(self):
+        self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/en/")
+        home = self.reader.toHtml()
+        self.assertIn('href="https://qgis.mierune.co.jp/en/"', home)
+        with patch.object(self.reader, "_external") as external:
+            self.reader.anchorClicked.emit(QUrl("https://qgis.mierune.co.jp/en/"))
+            external.assert_called_once_with("https://qgis.mierune.co.jp/en/")
+        self.assertEqual(PendingGet.calls, [])
+
+    def test_english_articles_open_in_the_reader(self):
+        self.reader.open("https://qgis.mierune.co.jp/en/posts/a?utm=x#top")
+        self.assertEqual(
+            PendingGet.calls[-1].url, "https://qgis.mierune.co.jp/en/posts/a"
+        )
+        PendingGet.calls[-1].loaded.emit(PAGE)
+        self.assertIn("Full article body", self.reader.toPlainText())
+        # Relative links keep working inside an English article.
+        self.reader.open("/en/posts/b")
+        self.assertEqual(
+            PendingGet.calls[-1].url, "https://qgis.mierune.co.jp/en/posts/b"
+        )
+
+    def test_japanese_articles_and_site_open_in_the_browser_instead(self):
+        with patch.object(self.reader, "_external") as external:
+            self.reader.open("https://qgis.mierune.co.jp/posts/a")
+            self.reader.open("https://qgis.mierune.co.jp/")
+            self.assertEqual(external.call_count, 2)
+        self.assertEqual(PendingGet.calls, [])
+
+    def test_the_japanese_reader_does_not_open_english_articles(self):
+        reader = ArticleReader("ja")
+        self.addCleanup(reader.deleteLater)
+        self.addCleanup(reader.shutdown)
+        with patch.object(reader, "_external") as external:
+            reader.open("https://qgis.mierune.co.jp/en/posts/a")
+            external.assert_called_once()
+        self.assertEqual(PendingGet.calls, [])
+
+
+class EnglishDockTests(unittest.TestCase):
+    def setUp(self):
+        i18n.load("en")
+        self.temp = tempfile.TemporaryDirectory()
+        self.settings = QSettings(
+            self.temp.name + "/settings.ini", QSettings.Format.IniFormat
+        )
+        self.settings.setValue(
+            "qgislab/bookmarks",
+            json.dumps(
+                [
+                    {"url": "https://qgis.mierune.co.jp/posts/a", "title": "日本語"},
+                    {
+                        "url": "https://qgis.mierune.co.jp/en/posts/a",
+                        "title": "English",
+                    },
+                ]
+            ),
+        )
+        PendingGet.calls = []
+        patches = [
+            patch("qgislab.search.HttpGet", PendingGet),
+            patch("qgislab.reader.HttpGet", PendingGet),
+        ]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        self.iface = Iface()  # owns the main window the dock is parented to
+        self.dock = LabDock(self.iface, "en", self.settings)
+
+    def tearDown(self):
+        self.dock.shutdown()
+        self.dock.deleteLater()
+        APP.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        self.temp.cleanup()
+
+    def test_saved_tab_lists_only_english_bookmarks(self):
+        self.assertEqual(self.dock.tabs.tabText(1), "Saved (1)")
+        self.dock.tabs.setCurrentIndex(1)
+        self.assertEqual(self.dock.list.count(), 1)
+        self.assertEqual(self.dock.list.item(0).text(), "English")
+
+    def test_start_opens_the_english_home_and_searches_english(self):
+        self.dock.start()
+        self.assertEqual(self.dock.reader.current_url, "https://qgis.mierune.co.jp/en/")
+        self.assertIn("locale=en", PendingGet.calls[-1].url)

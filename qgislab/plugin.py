@@ -2,10 +2,13 @@
 
 from pathlib import Path
 
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
+from . import i18n
+from .articles import site_language
 from .dock import LabDock
 
 
@@ -14,6 +17,13 @@ class QgisLabPlugin:
         self.iface = iface
         self.action = None
         self.dock = None
+        self.init_translation()
+
+    def init_translation(self):
+        """Load translations and pick the article language for the QGIS locale."""
+        locale = QgsApplication.instance().locale()
+        i18n.load(locale)
+        self.language = site_language(locale)
 
     def initGui(self):
         self.action = QAction(
@@ -21,14 +31,14 @@ class QgisLabPlugin:
             "QGIS LAB",
             self.iface.mainWindow(),
         )
-        self.action.setToolTip("QGIS LABの記事を読む・探す・保存する")
+        self.action.setToolTip(i18n.tr("Read, search and save QGIS LAB articles"))
         self.action.triggered.connect(self.run)
         self.iface.addPluginToWebMenu("QGIS LAB", self.action)
         self.iface.addToolBarIcon(self.action)
 
     def run(self):
         if self.dock is None:
-            self.dock = LabDock(self.iface)
+            self.dock = LabDock(self.iface, self.language)
             self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
         self.dock.show()
         self.dock.raise_()

@@ -5,7 +5,8 @@ from html import escape
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
-from .articles import article_url, clean_title
+from . import i18n
+from .articles import article_language, article_url, clean_title, home_url
 
 MAX_PAGE_BYTES = 5 * 1024 * 1024
 VOID = frozenset(
@@ -63,7 +64,9 @@ class ArticleHTML(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if len(self.stack) > 128:
-            raise ValueError("記事HTMLの入れ子が深すぎます。")
+            raise ValueError(
+                i18n.tr("The article’s HTML structure is too deeply nested.")
+            )
         node = Node(tag, dict(attrs))
         self.stack[-1].children.append(node)
         if tag not in VOID:
@@ -93,9 +96,9 @@ class Content:
 
 def extract_content(data, url):
     if len(data) > MAX_PAGE_BYTES:
-        raise ValueError("記事のサイズが上限を超えています。")
+        raise ValueError(i18n.tr("The article is too large."))
     if not article_url(url):
-        raise ValueError("QGIS LABの記事URLではありません。")
+        raise ValueError(i18n.tr("This is not a QGIS LAB article URL."))
     parser = ArticleHTML()
     parser.feed(data.decode("utf-8-sig", errors="replace"))
     # The site embeds several <html>/<body> fragments in an <article>.
@@ -111,12 +114,14 @@ def extract_content(data, url):
     )
     if article is None:
         raise ValueError(
-            "記事本文を見つけられませんでした。元の記事をブラウザで開いてください。"
+            i18n.tr(
+                "Could not find the article content. Try opening the original article in your browser."
+            )
         )
     body = next(n for n in article.walk() if n.attrs.get("id") == "content")
     heading = next((n for n in article.walk() if n.tag == "h1"), None)
     if heading is None or not heading.text().strip() or not body.text().strip():
-        raise ValueError("記事のタイトルまたは本文を読み取れませんでした。")
+        raise ValueError(i18n.tr("Could not read the article’s title or content."))
     title = clean_title(heading.text())
     images = {}
 
@@ -137,7 +142,9 @@ def extract_content(data, url):
             return (
                 f'<p><a href="{escape(target, quote=True)}">{escape(target)}</a></p>'
                 if target
-                else "<p>この埋め込みコンテンツは「ブラウザで開く」からご覧ください。</p>"
+                else "<p>"
+                + i18n.tr("To view this embedded content, use “Open in browser”.")
+                + "</p>"
             )
         if "callout-parent" in classes:
             caution = "caution" in classes
@@ -154,17 +161,18 @@ def extract_content(data, url):
         if tag == "img":
             if "callout-icon" in (attrs.get("class") or "").split():
                 label = attrs.get("alt") or (
-                    "注意："
+                    i18n.tr("Caution:")
                     if (attrs.get("src") or "").endswith("/caution.svg")
                     else ""
                 )
                 return f"<strong>{escape(label)}</strong>"
             source = web_url(attrs.get("src") or attrs.get("data-src") or "", url)
-            alt = escape(attrs.get("alt") or "記事の画像", quote=True)
+            alt = escape(attrs.get("alt") or i18n.tr("Article image"), quote=True)
             if not source or source == url:
                 return f"<span>[{alt}]</span>"
             if len(images) >= 100:
-                return f'<a href="{escape(source, quote=True)}">画像を開く: {alt}</a>'
+                label = i18n.tr("Open image: {}").format(alt)
+                return f'<a href="{escape(source, quote=True)}">{label}</a>'
             # Request PNG from the site's image CDN, so WebP plugins are not required.
             if urlsplit(source).hostname == "images.microcms-assets.io":
                 parts = urlsplit(source)
@@ -237,7 +245,9 @@ def extract_content(data, url):
         (n.attrs.get("datetime") or "")[:10] for n in article.walk() if n.tag == "time"
     ]
     date_line = " · ".join(
-        f"{label}: {date}" for label, date in zip(("公開", "更新"), dates) if date
+        f"{label}: {date}"
+        for label, date in zip((i18n.tr("Published"), i18n.tr("Updated")), dates)
+        if date
     )
     header = next((n for n in article.walk() if n.tag == "header"), None)
     # The eyecatch is outside <header>; selecting header + body used to lose it.
@@ -258,7 +268,7 @@ def extract_content(data, url):
         )
         + render(body)
     )
-    html += (
-        f'<hr><p>出典: <a href="{escape(url, quote=True)}">QGIS LAB by MIERUNE</a></p>'
-    )
+    site = escape(home_url(article_language(url)), quote=True)
+    source_link = f'<a href="{site}">QGIS LAB by MIERUNE</a>'
+    html += f"<hr><p>{i18n.tr('Source: {}').format(source_link)}</p>"
     return Content(title, html, images)

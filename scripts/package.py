@@ -23,8 +23,13 @@ def build(output, version=None):
     files = [
         ROOT / name for name in ("__init__.py", "icon.svg", "LICENSE", "README.md")
     ]
-    files += sorted((ROOT / "qgislab").rglob("*.py"))
+    files += sorted(
+        path
+        for path in (ROOT / "qgislab").rglob("*.py")
+        if path.name != "extract.py"  # dev-only translation tool
+    )
     files += sorted((ROOT / "qgislab").rglob("*.svg"))
+    files += sorted((ROOT / "qgislab" / "i18n").glob("*.json"))
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         archive.writestr(f"{PLUGIN_NAME}/metadata.txt", metadata)
         for path in files:
