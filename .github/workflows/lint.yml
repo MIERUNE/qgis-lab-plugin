@@ -18,3 +18,5 @@ jobs:
       - run: ruff check . --output-format=github
       - run: ruff format . --check
       - run: python -m unittest discover -s tests -v
+      - name: Security check with bandit
+        run: uv run bandit -c pyproject.toml -l -r .

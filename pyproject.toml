@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 dependencies = []
 
 [dependency-groups]
-dev = ["pytest>=7", "ruff>=0.14"]
+dev = ["bandit>=1.8", "pytest>=7", "ruff>=0.14"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -19,3 +19,6 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
 ignore = ["E501"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "scripts", ".venv", ".claude"]
