@@ -44,7 +44,7 @@ class HttpGet(QObject):
             return
         self.buffer.extend(bytes(self.reply.readAll()))
         if len(self.buffer) > self.byte_limit:
-            self._abort(i18n.tr("The download exceeds the size limit."))
+            self._abort(i18n.tr("The download is too large."))
 
     def _abort(self, message):
         if self.reply is not None:
@@ -57,7 +57,7 @@ class HttpGet(QObject):
         self.buffer.extend(bytes(reply.readAll()))
         failure = self.failure
         if len(self.buffer) > self.byte_limit:
-            failure = i18n.tr("The download exceeds the size limit.")
+            failure = i18n.tr("The download is too large.")
         status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
         if not failure and (
             reply.error() != QNetworkReply.NetworkError.NoError or status != 200

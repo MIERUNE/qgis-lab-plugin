@@ -595,7 +595,7 @@ class ReaderTests(unittest.TestCase):
     def test_malformed_page_reports_error(self):
         self.reader.open("/posts/a")
         PendingGet.calls[-1].loaded.emit(b"<html>login</html>")
-        self.assertIn("Could not find the article body", self.reader.toPlainText())
+        self.assertIn("Could not find the article content", self.reader.toPlainText())
 
     def test_images_use_network_and_resize_without_reloading_article(self):
         from qgis.PyQt.QtCore import QBuffer, QIODevice
@@ -638,7 +638,7 @@ class ReaderTests(unittest.TestCase):
         PendingGet.calls[-1].loaded.emit(PAGE_WITH_IMAGE)
         PendingGet.calls[-1].loaded.emit(b"not an image")
         self.assertIn("Full article body", self.reader.toPlainText())
-        self.assertIn("Images that could not be displayed: 1", messages[-1])
+        self.assertIn("Some images could not be displayed (1 failed)", messages[-1])
 
     def test_new_navigation_cancels_image_requests(self):
         self.reader.open("/posts/a")

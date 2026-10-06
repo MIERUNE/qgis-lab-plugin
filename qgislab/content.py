@@ -64,7 +64,9 @@ class ArticleHTML(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         if len(self.stack) > 128:
-            raise ValueError(i18n.tr("The article HTML is nested too deeply."))
+            raise ValueError(
+                i18n.tr("The article’s HTML structure is too deeply nested.")
+            )
         node = Node(tag, dict(attrs))
         self.stack[-1].children.append(node)
         if tag not in VOID:
@@ -94,7 +96,7 @@ class Content:
 
 def extract_content(data, url):
     if len(data) > MAX_PAGE_BYTES:
-        raise ValueError(i18n.tr("The article exceeds the size limit."))
+        raise ValueError(i18n.tr("The article is too large."))
     if not article_url(url):
         raise ValueError(i18n.tr("This is not a QGIS LAB article URL."))
     parser = ArticleHTML()
@@ -113,13 +115,13 @@ def extract_content(data, url):
     if article is None:
         raise ValueError(
             i18n.tr(
-                "Could not find the article body. Please open the original article in your browser."
+                "Could not find the article content. Try opening the original article in your browser."
             )
         )
     body = next(n for n in article.walk() if n.attrs.get("id") == "content")
     heading = next((n for n in article.walk() if n.tag == "h1"), None)
     if heading is None or not heading.text().strip() or not body.text().strip():
-        raise ValueError(i18n.tr("Could not read the article title or body."))
+        raise ValueError(i18n.tr("Could not read the article’s title or content."))
     title = clean_title(heading.text())
     images = {}
 
@@ -141,7 +143,7 @@ def extract_content(data, url):
                 f'<p><a href="{escape(target, quote=True)}">{escape(target)}</a></p>'
                 if target
                 else "<p>"
-                + i18n.tr("Please view this embedded content via “Open in browser”.")
+                + i18n.tr("To view this embedded content, use “Open in browser”.")
                 + "</p>"
             )
         if "callout-parent" in classes:

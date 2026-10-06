@@ -141,9 +141,9 @@ class LabDock(QDockWidget):
         self.tabs.setExpanding(True)
         side.addWidget(self.tabs)
         self.search = QLineEdit()
-        self.search.setPlaceholderText(i18n.tr("Search articles across the site…"))
+        self.search.setPlaceholderText(i18n.tr("Search all articles…"))
         self.search.setClearButtonEnabled(True)
-        self.search.setAccessibleName(i18n.tr("Search articles across the site"))
+        self.search.setAccessibleName(i18n.tr("Search all articles"))
         self.search_controls = QWidget()
         search_row = QHBoxLayout(self.search_controls)
         search_row.setContentsMargins(0, 0, 0, 0)
@@ -287,13 +287,13 @@ class LabDock(QDockWidget):
             if saved_tab
             else i18n.tr("Searching…")
             if self.search_pending
-            else i18n.tr("Results {}–{} of {}").format(
+            else i18n.tr("Showing {}–{} of {}").format(
                 self.results.offset + 1,
                 self.results.offset + len(articles),
                 self.results.total,
             )
             if articles
-            else i18n.tr("Results 0 of {}").format(self.results.total)
+            else i18n.tr("Showing 0 of {}").format(self.results.total)
         )
         self.pagination.setVisible(not saved_tab)
         self.search_status.setVisible(not saved_tab)
@@ -312,11 +312,11 @@ class LabDock(QDockWidget):
             i18n.tr("No articles match your search.")
             if not saved_tab and self.search.text().strip()
             else i18n.tr(
-                "No saved articles yet. Open an article and press the star button to save it."
+                "No saved articles yet. Open an article and click the star button to save it."
             )
             if self.tabs.currentIndex() == 1
             else i18n.tr(
-                "No articles found. Press the refresh button next to the search box to try again."
+                "No articles found. Use the refresh button next to the search box to try again."
             )
         )
 
@@ -354,7 +354,7 @@ class LabDock(QDockWidget):
         self.search_status.setText(
             message
             + "\n"
-            + i18n.tr("Press the refresh button next to the search box to try again.")
+            + i18n.tr("Use the refresh button next to the search box to try again.")
         )
         self.render_list()
 

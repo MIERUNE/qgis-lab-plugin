@@ -257,7 +257,7 @@ class ArticleReader(QTextBrowser):
         else:
             self.setHtml(
                 f"<h2>{i18n.tr('Loading article…')}</h2>"
-                f"<p>{i18n.tr('Fetching the article content.')}</p>"
+                f"<p>{i18n.tr('Fetching the article content…')}</p>"
             )
             self.loading.emit(True)
             self._request = HttpGet(article_url(url), MAX_PAGE_BYTES, self)
@@ -282,20 +282,20 @@ class ArticleReader(QTextBrowser):
             "</td></tr></table>"
             '<table class="home-welcome" width="100%" cellspacing="0" cellpadding="22"><tr><td>'
             f"<h2>{i18n.tr('Select an article')}</h2>"
-            f"<p>{i18n.tr('Choose an article to read from the “Articles” tab on the left.')}</p>"
+            f"<p>{i18n.tr('Pick an article from the “Articles” tab on the left to start reading.')}</p>"
             "</td></tr></table>"
             '<table class="home-steps" width="100%" cellspacing="0" cellpadding="8">'
             '<tr><td class="home-step" width="56" valign="top">01</td>'
-            f"<td><p>{i18n.tr('<b>Search</b> Find articles by keyword')}</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Search</b> for articles by keyword')}</p></td></tr>"
             '<tr><td class="home-step" width="56" valign="top">02</td>'
-            f"<td><p>{i18n.tr('<b>Read</b> Pick an article to show it here')}</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Read</b> any article right in this panel')}</p></td></tr>"
             '<tr><td class="home-step" width="56" valign="top">03</td>'
-            f"<td><p>{i18n.tr('<b>Save</b> Bookmark articles you like to read them quickly')}</p></td></tr>"
+            f"<td><p>{i18n.tr('<b>Save</b> your favorites to come back to them later')}</p></td></tr>"
             "</table>"
             f'<h3 class="home-about-title">{i18n.tr("About this plugin")}</h3>'
-            f'<p class="home-about">{i18n.tr("A plugin to read, search and save QGIS LAB articles while you work in QGIS.")}</p>'
+            f'<p class="home-about">{i18n.tr("Read, search and save QGIS LAB articles without leaving QGIS.")}</p>'
             '<table class="home-link" cellspacing="0" cellpadding="12"><tr><td>'
-            f'<a href="{SITE_URL}"><b>{i18n.tr("Open the QGIS LAB website ↗")}</b></a>'
+            f'<a href="{SITE_URL}"><b>{i18n.tr("Visit the QGIS LAB website ↗")}</b></a>'
             "</td></tr></table>"
             f'<p class="dates home-version">{i18n.tr("QGIS LAB plugin · Version {}").format(escape(version))}</p>'
         )
@@ -330,7 +330,7 @@ class ArticleReader(QTextBrowser):
             self._request.deleteLater()
             self._request = None
         hint = i18n.tr(
-            "Press “Reload” to try again, or view the original article via “Open in browser”."
+            "Click “Reload” to try again, or use “Open in browser” to view the original article."
         )
         self.setHtml(
             f"<h2>{i18n.tr('Could not load the article')}</h2>"
@@ -360,7 +360,7 @@ class ArticleReader(QTextBrowser):
         pending = len(self._queue) + len(self._image_requests)
         if pending:
             self.message.emit(
-                i18n.tr("Article displayed · Loading images ({} remaining)").format(
+                i18n.tr("Article loaded · Loading images ({} remaining)").format(
                     pending
                 )
             )
@@ -369,8 +369,8 @@ class ArticleReader(QTextBrowser):
                 ""
                 if not self._image_errors
                 else i18n.tr(
-                    "Images that could not be displayed: {}. "
-                    "You can check the original article via “Open in browser”."
+                    "Some images could not be displayed ({} failed). "
+                    "Use “Open in browser” to see the original article."
                 ).format(self._image_errors)
             )
             self._restore_scroll()
@@ -429,7 +429,7 @@ class ArticleReader(QTextBrowser):
             self.document().addResource(
                 IMAGE_TYPE,
                 QUrl(key),
-                self._placeholder(i18n.tr("Could not display image")),
+                self._placeholder(i18n.tr("Image could not be displayed")),
             )
             self.document().markContentsDirty(0, self.document().characterCount())
         self._start_images()

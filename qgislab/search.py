@@ -66,7 +66,7 @@ def parse_results(data):
         return SearchResult(articles, total, offset, limit)
     except (ValueError, TypeError, KeyError, AttributeError) as error:
         raise ValueError(
-            i18n.tr("The article search response was malformed.")
+            i18n.tr("The search returned an unexpected response.")
         ) from error
 
 
