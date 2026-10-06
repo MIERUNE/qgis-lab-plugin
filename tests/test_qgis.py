@@ -640,6 +640,18 @@ class ReaderTests(unittest.TestCase):
         self.assertIn("このプラグインについて", text)
         self.assertEqual(self.reader.current_title, "ホーム")
 
+    def test_source_credit_opens_the_site_instead_of_scrolling_to_the_top(self):
+        self.reader.open("/posts/a")
+        PendingGet.calls[-1].loaded.emit(PAGE)
+        self.reader.verticalScrollBar().setValue(50)
+        requests = len(PendingGet.calls)
+        with patch.object(self.reader, "_external") as external:
+            self.reader.anchorClicked.emit(QUrl("https://qgis.mierune.co.jp/"))
+            external.assert_called_once_with("https://qgis.mierune.co.jp/")
+        self.assertEqual(self.reader.current_url, "https://qgis.mierune.co.jp/posts/a")
+        self.assertEqual(len(PendingGet.calls), requests)
+        self.assertIn('href="https://qgis.mierune.co.jp/"', self.reader.toHtml())
+
     def test_malformed_page_reports_error(self):
         self.reader.open("/posts/a")
         PendingGet.calls[-1].loaded.emit(b"<html>login</html>")

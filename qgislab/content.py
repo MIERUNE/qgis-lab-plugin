@@ -6,7 +6,7 @@ from html.parser import HTMLParser
 from urllib.parse import parse_qs, parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from . import i18n
-from .articles import article_url, clean_title
+from .articles import article_language, article_url, clean_title, home_url
 
 MAX_PAGE_BYTES = 5 * 1024 * 1024
 VOID = frozenset(
@@ -268,6 +268,7 @@ def extract_content(data, url):
         )
         + render(body)
     )
-    source_link = f'<a href="{escape(url, quote=True)}">QGIS LAB by MIERUNE</a>'
+    site = escape(home_url(article_language(url)), quote=True)
+    source_link = f'<a href="{site}">QGIS LAB by MIERUNE</a>'
     html += f"<hr><p>{i18n.tr('Source: {}').format(source_link)}</p>"
     return Content(title, html, images)
